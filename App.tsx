@@ -8,6 +8,14 @@ import { IFormulario } from "./components/vo/IFormulario";
 import Home from "./components/Home";
 import CadastrarVinicula from "./components/CadastrarVinucula";
 import ListaViniculas from "./components/ListaViniculas";
+import { useForm } from "react-hook-form";
+
+export interface IForm {
+  control: any;
+  getValues: any;
+  setValue: any;
+  reset: any;
+}
 
 const App = () => {
   const [username, setUsername] = useState("");
@@ -17,6 +25,10 @@ const App = () => {
     ""
   );
   const [currentPage, setCurrentPage] = useState("Home");
+
+  const { control, getValues, setValue, reset } = useForm();
+
+  const form = { control, getValues, setValue, reset };
 
   useEffect(() => {
     if (!user) return;
@@ -63,13 +75,22 @@ const App = () => {
           setUser={setUser}
           currentPage={currentPage}
           setCurrentPage={setCurrentPage}
+          form={form}
         />
       )}
       {user && currentPage === "Cadastrar" && (
-        <CadastrarVinicula user={user} setCurrentPage={setCurrentPage} />
+        <CadastrarVinicula
+          user={user}
+          setCurrentPage={setCurrentPage}
+          form={form}
+        />
       )}
       {user && currentPage === "Viniculas" && (
-        <ListaViniculas setCurrentPage={setCurrentPage} user={user} />
+        <ListaViniculas
+          setCurrentPage={setCurrentPage}
+          user={user}
+          form={form}
+        />
       )}
     </View>
   );

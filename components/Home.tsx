@@ -2,6 +2,7 @@ import React from "react";
 import { View, TouchableOpacity, Text, StyleSheet, Image } from "react-native";
 import { IUser } from "./vo/IUser";
 import Icon from "react-native-vector-icons/FontAwesome";
+import { IForm } from "../App";
 
 // Definindo as chaves possíveis de página para tipagem mais segura
 export type PageKey = "Home" | "Questionario" | "Viniculas" | "Cadastrar";
@@ -11,6 +12,7 @@ interface HomeProps {
   currentPage: PageKey;
   setCurrentPage: (page: PageKey) => void;
   setUser: (user: IUser | null) => void;
+  form: IForm;
 }
 
 const Home: React.FC<HomeProps> = ({
@@ -18,6 +20,7 @@ const Home: React.FC<HomeProps> = ({
   currentPage,
   setCurrentPage,
   setUser,
+  form,
 }) => {
   const options: Array<{ key: PageKey; label: string; requireAdmin: boolean }> =
     [
@@ -57,7 +60,10 @@ const Home: React.FC<HomeProps> = ({
                 styles.button,
                 currentPage === opt.key && styles.buttonActive,
               ]}
-              onPress={() => setCurrentPage(opt.key)}
+              onPress={() => {
+                form.reset();
+                setCurrentPage(opt.key);
+              }}
             >
               <Text
                 style={[

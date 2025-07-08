@@ -10,19 +10,24 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Platform,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { IUser } from "./vo/IUser";
 import { IVinicula } from "./vo/IVinicula";
 import { IAvaliacao } from "./vo/IAvaliacao";
+import { IForm } from "../App";
+import { Asset } from "react-native-image-picker";
 
 interface ListaViniculasProps {
   setCurrentPage: (page: string) => void;
   user: IUser | null;
+  form: IForm;
 }
 
 const ListaViniculas: React.FC<ListaViniculasProps> = ({
   user,
+  form,
   setCurrentPage,
 }) => {
   const [viniculas, setViniculas] = useState<IVinicula[]>([]);
@@ -36,6 +41,7 @@ const ListaViniculas: React.FC<ListaViniculasProps> = ({
   const [loadingReviews, setLoadingReviews] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchViniculas = async () => {
@@ -54,6 +60,10 @@ const ListaViniculas: React.FC<ListaViniculasProps> = ({
   }, []);
 
   useEffect(() => {
+    setErrorMessage(null);
+  }, [selected]);
+
+  useEffect(() => {
     if (!selected) return;
     setLoadingReviews(true);
 
@@ -69,12 +79,10 @@ const ListaViniculas: React.FC<ListaViniculasProps> = ({
 
   const handleSubmitReview = async () => {
     if (rating < 1 || rating > 5 || !reviewText.trim()) {
-      Alert.alert(
-        "Avaliação",
-        "Selecione de 1 a 5 estrelas e escreva um comentário."
-      );
+      setErrorMessage("Selecione de 1 a 5 estrelas e escreva um comentário.");
       return;
     }
+    setErrorMessage(null);
     setSubmitting(true);
     try {
       const res = await fetch(
@@ -105,6 +113,29 @@ const ListaViniculas: React.FC<ListaViniculasProps> = ({
     }
   };
 
+  const HOST = Platform.OS === "android" ? "10.0.2.2" : "localhost";
+
+  const handleEditVinicula = () => {
+    if (!selected) return;
+
+    form.setValue("id", selected.id);
+    form.setValue("nome", selected.nome);
+    form.setValue("horarios", selected.horarios);
+    form.setValue("instagram", selected.instagram);
+    form.setValue("localizacao", selected.localizacao);
+    form.setValue("novo", "false");
+
+    const assets: Asset[] = selected.fotos.map((foto) => ({
+      uri: `http://${HOST}:8080/uploads/${foto.caminho}`,
+      fileName: foto.caminho, // pode usar nome original ou o caminho
+      type: foto.tipo || "image/jpeg", // adapte se tiver o tipo vindo do back
+    }));
+
+    // injeta as imagens no form
+    form.setValue("fotos", assets);
+    setCurrentPage("Cadastrar");
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -124,27 +155,47 @@ const ListaViniculas: React.FC<ListaViniculasProps> = ({
   if (selected) {
     return (
       <ScrollView contentContainerStyle={styles.detailContainer}>
-        <TouchableOpacity
-          onPress={() => setSelected(null)}
-          style={styles.backButton}
-        >
-          <Icon name="arrow-left" size={20} color="#1B3764" />
-          <Text style={styles.backText}>Voltar</Text>
-        </TouchableOpacity>
+        {/* Header com botão de voltar e, se admin, botão de editar */}
+        <View style={styles.detailHeader}>
+          <TouchableOpacity
+            onPress={() => setSelected(null)}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={20} color="#1B3764" />
+            <Text style={styles.backText}>Voltar</Text>
+          </TouchableOpacity>
+          {user?.admin && (
+            <TouchableOpacity
+              onPress={() => handleEditVinicula()}
+              style={styles.editButton}
+            >
+              <Icon name="edit" size={20} color="#1B3764" />
+            </TouchableOpacity>
+          )}
+        </View>
+
         <Text style={styles.detailTitle}>{selected.nome}</Text>
         <ScrollView horizontal style={styles.photosContainer}>
           {selected.fotos.map((foto) => (
             <Image
               key={foto.id}
-              source={{ uri: `http://localhost:8080/${foto.caminho}` }}
+              source={{ uri: `http://${HOST}:8080/uploads/${foto.caminho}` }}
               style={styles.detailImage}
             />
           ))}
         </ScrollView>
-        <Text style={styles.detailText}>Horários: {selected.horarios}</Text>
-        <Text style={styles.detailText}>Instagram: {selected.instagram}</Text>
+        <Text style={styles.detailText}>Horários: ⏰ {selected.horarios}</Text>
+        <View style={styles.row}>
+          <Text style={styles.detailText}>Instagram: </Text>
+          <Image
+            source={require("./images/instagram.svg")}
+            style={styles.icon}
+            resizeMode="contain"
+          />
+          <Text style={styles.detailText}>{selected.instagram}</Text>
+        </View>
         <Text style={styles.detailText}>
-          Localização: {selected.localizacao}
+          Localização: 📍 {selected.localizacao}
         </Text>
 
         <Text style={styles.sectionTitle}>Avaliações</Text>
@@ -203,6 +254,7 @@ const ListaViniculas: React.FC<ListaViniculasProps> = ({
               {submitting ? "Enviando..." : "Enviar Avaliação"}
             </Text>
           </TouchableOpacity>
+          {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
         </View>
       </ScrollView>
     );
@@ -233,7 +285,7 @@ const ListaViniculas: React.FC<ListaViniculasProps> = ({
             {item.fotos.length > 0 && (
               <Image
                 source={{
-                  uri: `http://localhost:8080/${item.fotos[0].caminho}`,
+                  uri: `http://${HOST}:8080/uploads/${item.fotos[0].caminho}`,
                 }}
                 style={styles.thumbnail}
               />
@@ -253,6 +305,23 @@ const styles = StyleSheet.create({
     height: 180,
     marginBottom: 16,
     alignSelf: "center",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  icon: {
+    width: 16,
+    height: 16,
+    marginHorizontal: 4,
+    marginBottom: 8,
+    alignSelf: "center",
+  },
+  detailText: {
+    fontSize: 16,
+    lineHeight: 16,
+    marginBottom: 8,
+    color: "#333",
   },
   reviewMeta: {
     fontSize: 12,
@@ -310,15 +379,23 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#fff",
   },
+  detailHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   backButton: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
   },
   backText: {
     color: "#1B3764",
     marginLeft: 6,
     fontSize: 16,
+  },
+  editButton: {
+    padding: 6,
   },
   detailTitle: {
     fontSize: 24,
@@ -334,11 +411,6 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 6,
     marginRight: 8,
-  },
-  detailText: {
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 18,

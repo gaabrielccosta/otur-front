@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Image,
-  Alert,
   Platform,
   StatusBar,
 } from "react-native";
@@ -17,26 +16,28 @@ import {
   Asset,
   ImageLibraryOptions,
 } from "react-native-image-picker";
-import api from "./api/api";
+import { Controller, useWatch } from "react-hook-form";
 import { IUser } from "./vo/IUser";
 import { PageKey } from "./Home";
+import { IForm } from "../App";
 
 interface CadastrarViniculaProps {
   user: IUser | null;
   setCurrentPage: (page: PageKey) => void;
+  form: IForm;
 }
 
 const CadastrarVinicula: React.FC<CadastrarViniculaProps> = ({
   user,
+  form,
   setCurrentPage,
 }) => {
-  const [nome, setNome] = useState("");
-  const [fotos, setFotos] = useState<Asset[]>([]);
-  const [horarios, setHorarios] = useState("");
-  const [instagram, setInstagram] = useState("");
-  const [localizacao, setLocalizacao] = useState("");
+  const { control, getValues, setValue } = form;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Use useWatch to reactively update fotos when form state changes
+  const fotos: Asset[] = useWatch({ control, name: "fotos", defaultValue: [] });
 
   const pickFotos = () => {
     const options: ImageLibraryOptions = {
@@ -50,59 +51,80 @@ const CadastrarVinicula: React.FC<CadastrarViniculaProps> = ({
         return;
       }
       if (response.assets) {
-        setFotos((prev) => [...prev, ...response.assets!]);
+        const current: Asset[] = getValues("fotos") || [];
+        setValue("fotos", [...current, ...response.assets]);
         setErrorMessage(null);
       }
     });
   };
 
   const removeFoto = (index: number) => {
-    setFotos((prev) => prev.filter((_, i) => i !== index));
+    const current: Asset[] = getValues("fotos") || [];
+    setValue(
+      "fotos",
+      current.filter((_, i) => i !== index)
+    );
   };
 
   const handleSubmit = async () => {
+    const nome = getValues("nome");
+    const horarios = getValues("horarios");
+    const instagram = getValues("instagram");
+    const localizacao = getValues("localizacao");
+    const novo = getValues("novo") ?? "true";
+    const id = getValues("id") ?? -1;
+
     if (!nome || !horarios || !instagram || !localizacao) {
       setErrorMessage("Preencha todos os campos");
       return;
     }
     setErrorMessage(null);
+
     try {
       const formData = new FormData();
+      formData.append("id", id);
       formData.append("nome", nome);
       formData.append("horarios", horarios);
       formData.append("instagram", instagram);
       formData.append("localizacao", localizacao);
+      formData.append("novo", novo);
 
-      fotos.forEach((asset, idx) => {
-        console.log(asset);
-        if (asset.uri) {
-          const foto = {
-            uri: asset.uri,
-            type: asset.type || "image/jpeg",
-            name: asset.fileName || `foto_${idx}.jpg`,
-          } as any;
-          console.log(foto);
-          formData.append("fotos", foto);
-        }
-      });
+      // Append fotos from the reactive form state
+      for (let idx = 0; idx < fotos.length; idx++) {
+        const asset = fotos[idx];
+        if (!asset.uri) continue;
 
-      fetch("http://localhost:8080/api/viniculas/postar", {
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+
+        formData.append("fotos", blob, asset.fileName || `foto_${idx}.jpg`);
+      }
+
+      await fetch("http://localhost:8080/api/viniculas/postar", {
         method: "POST",
         body: formData,
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Falha ao enviar");
-          return res;
-        })
-        .then(() => console.log("Enviado!"))
-        .catch(console.error);
-      setSuccessMessage("Vinícola cadastrada com sucesso!");
+      });
+      const successPartMsg = novo === "true" ? "cadastrada" : "salva";
+      setSuccessMessage(`Vinícola ${successPartMsg} com sucesso!`);
       setTimeout(() => {
-        setCurrentPage("Home");
-      }, 1500);
+        setCurrentPage("Viniculas");
+      }, 1000);
     } catch (err) {
       setErrorMessage("Erro ao cadastrar vinícola");
     }
+  };
+
+  const handleDelete = async () => {
+    const id = getValues("id") ?? -1;
+    if (id === -1) return;
+
+    await fetch(`http://localhost:8080/api/viniculas/deletar/${id}`, {
+      method: "POST",
+    });
+    setSuccessMessage("Vinícula deletada com sucesso!");
+    setTimeout(() => {
+      setCurrentPage("Viniculas");
+    }, 1000);
   };
 
   return (
@@ -117,11 +139,18 @@ const CadastrarVinicula: React.FC<CadastrarViniculaProps> = ({
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Cadastrar Vinícola</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Nome"
-          value={nome}
-          onChangeText={setNome}
+        <Controller
+          control={control}
+          name="nome"
+          defaultValue={""}
+          render={({ field: { onChange, value } }) => (
+            <TextInput
+              style={styles.input}
+              placeholder="Nome"
+              value={value}
+              onChangeText={onChange}
+            />
+          )}
         />
 
         <TouchableOpacity style={styles.photoButton} onPress={pickFotos}>
@@ -151,30 +180,59 @@ const CadastrarVinicula: React.FC<CadastrarViniculaProps> = ({
           )}
         </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Horários (ex: 08:00 - 18:00)"
-          value={horarios}
-          onChangeText={setHorarios}
+        <Controller
+          control={control}
+          name="horarios"
+          defaultValue={""}
+          render={({ field: { onChange, value } }) => (
+            <TextInput
+              style={styles.input}
+              placeholder="Horários (ex: 08:00 - 18:00)"
+              value={value}
+              onChangeText={onChange}
+            />
+          )}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Instagram (@usuario)"
-          value={instagram}
-          onChangeText={setInstagram}
+        <Controller
+          control={control}
+          name="instagram"
+          defaultValue={""}
+          render={({ field: { onChange, value } }) => (
+            <TextInput
+              style={styles.input}
+              placeholder="Instagram (@usuario)"
+              value={value}
+              onChangeText={onChange}
+            />
+          )}
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Localização"
-          value={localizacao}
-          onChangeText={setLocalizacao}
+        <Controller
+          control={control}
+          name="localizacao"
+          defaultValue={""}
+          render={({ field: { onChange, value } }) => (
+            <TextInput
+              style={styles.input}
+              placeholder="Localização"
+              value={value}
+              onChangeText={onChange}
+            />
+          )}
         />
 
         <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-          <Text style={styles.buttonText}>Cadastrar</Text>
+          <Text style={styles.buttonText}>
+            {getValues("novo") === "false" ? "Salvar" : "Cadastrar"}
+          </Text>
         </TouchableOpacity>
+
+        {getValues("novo") === "false" && (
+          <TouchableOpacity style={styles.buttonDelete} onPress={handleDelete}>
+            <Text style={styles.buttonText}>Excluir</Text>
+          </TouchableOpacity>
+        )}
 
         {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
         {successMessage && <Text style={styles.success}>{successMessage}</Text>}
@@ -254,6 +312,14 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: "#1B3764",
+    height: 48,
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+  },
+  buttonDelete: {
+    backgroundColor: "red",
     height: 48,
     borderRadius: 6,
     justifyContent: "center",
