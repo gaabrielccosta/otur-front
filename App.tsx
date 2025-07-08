@@ -7,6 +7,7 @@ import api from "./components/api/api";
 import { IFormulario } from "./components/vo/IFormulario";
 import Home from "./components/Home";
 import CadastrarVinicula from "./components/CadastrarVinucula";
+import ListaViniculas from "./components/ListaViniculas";
 
 const App = () => {
   const [username, setUsername] = useState("");
@@ -66,6 +67,9 @@ const App = () => {
       )}
       {user && currentPage === "Cadastrar" && (
         <CadastrarVinicula user={user} setCurrentPage={setCurrentPage} />
+      )}
+      {user && currentPage === "Viniculas" && (
+        <ListaViniculas setCurrentPage={setCurrentPage} user={user} />
       )}
     </View>
   );

@@ -74,23 +74,28 @@ const CadastrarVinicula: React.FC<CadastrarViniculaProps> = ({
       formData.append("localizacao", localizacao);
 
       fotos.forEach((asset, idx) => {
+        console.log(asset);
         if (asset.uri) {
-          formData.append("fotos", {
+          const foto = {
             uri: asset.uri,
             type: asset.type || "image/jpeg",
             name: asset.fileName || `foto_${idx}.jpg`,
-          } as any);
+          } as any;
+          console.log(foto);
+          formData.append("fotos", foto);
         }
       });
 
-      await api.post("/postar", formData, {
-        headers: {
-          // força o multipart/data
-          "Content-Type": "multipart/form-data",
-          // opcionalmente:
-          // Accept: "application/json",
-        },
-      });
+      fetch("http://localhost:8080/api/viniculas/postar", {
+        method: "POST",
+        body: formData,
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Falha ao enviar");
+          return res;
+        })
+        .then(() => console.log("Enviado!"))
+        .catch(console.error);
       setSuccessMessage("Vinícola cadastrada com sucesso!");
       setTimeout(() => {
         setCurrentPage("Home");
